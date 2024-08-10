@@ -1,0 +1,14 @@
+[package]
+name = "human-chrono-parser"
+version = "0.0.1"
+description = "Parse human-written relative dates like \"today\" ,\"tomorrow\", \"in 3 days\", \"next monday\" and other variants."
+readme = "README.md"
+edition = "2021"
+authors = ["Erle Carrara <carrara.erle@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ecarrara/human-chrono-parser"
+keywords = ["chrono", "date", "nlp", "parser", "human"]
+
+[dependencies]
+chrono = "^0.4"
+winnow = "^0.6"
