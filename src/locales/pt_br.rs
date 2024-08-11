@@ -1,91 +1,36 @@
 use std::str::FromStr;
 
-use chrono::{Datelike, Days, Local, Month, NaiveDate, Weekday};
+use chrono::{Month, Weekday};
 use winnow::{
     ascii::{digit1, space1},
     combinator::{alt, opt},
+    error::ContextError,
     PResult, Parser,
 };
 
-use crate::{HumanDateParser, Ordinal};
+use crate::{HumanDateExpr, HumanDateKeyword, Ordinal};
 
-pub struct HumanDateParserBrazillianPortuguese;
+pub struct HumanDateParserBrazillianPortugueseParser;
 
-impl HumanDateParserBrazillianPortuguese {
-    pub fn parse(text: &str) -> Option<NaiveDate> {
-        let now = Local::now().naive_local().date();
-        HumanDateParserBrazillianPortuguese::parse_relative(text, now)
+impl HumanDateParserBrazillianPortugueseParser {
+    pub fn new() -> Self {
+        HumanDateParserBrazillianPortugueseParser {}
     }
 }
 
-impl HumanDateParser for HumanDateParserBrazillianPortuguese {
-    fn parse_relative(text: &str, now: NaiveDate) -> Option<NaiveDate> {
-        match parse(text) {
-            Ok((_, expr)) => match expr {
-                HumanDateExpr::Keyword(keyword) => match keyword {
-                    HumanDateKeyword::Today => Some(now),
-                    HumanDateKeyword::Tomorrow => Some(now.checked_add_days(Days::new(1)).unwrap()),
-                    HumanDateKeyword::AfterTomorrow => {
-                        Some(now.checked_add_days(Days::new(2)).unwrap())
-                    }
-                },
-                HumanDateExpr::InNDays(n) => Some(now.checked_add_days(Days::new(n)).unwrap()),
-                HumanDateExpr::ThisWeekWeekday(weekday) => {
-                    let n =
-                        (7 - now.weekday().number_from_sunday() + weekday.number_from_sunday()) % 7;
-                    Some(now.checked_add_days(Days::new(n.into())).unwrap())
-                }
-                HumanDateExpr::NextWeekWeekday(weekday) => {
-                    let n = 7
-                        + (7 - now.weekday().number_from_sunday() + weekday.number_from_sunday())
-                            % 7;
-
-                    Some(now.checked_add_days(Days::new(n.into())).unwrap())
-                }
-                HumanDateExpr::OrdinalWeekdayOfMonth(ordinal, weekday, month) => {
-                    NaiveDate::from_weekday_of_month_opt(
-                        now.year(),
-                        month.number_from_month(),
-                        weekday,
-                        ordinal.as_number(),
-                    )
-                }
-            },
-            Err(err) => {
-                eprintln!("error: {}", err);
-                None
-            }
-        }
+impl Parser<&str, HumanDateExpr, ContextError> for HumanDateParserBrazillianPortugueseParser {
+    fn parse_next(&mut self, input: &mut &str) -> PResult<HumanDateExpr> {
+        let mut parser = alt((
+            keyword.map(HumanDateExpr::Keyword),
+            in_n_days.map(HumanDateExpr::InNDays),
+            ordinal_weekday_of_month.map(|(ordinal, weekday, month)| {
+                HumanDateExpr::OrdinalWeekdayOfMonth(ordinal, weekday, month)
+            }),
+            this_week_weekday.map(HumanDateExpr::ThisWeekWeekday),
+            next_week_weekday.map(HumanDateExpr::NextWeekWeekday),
+        ));
+        parser.parse_next(input)
     }
-}
-
-#[derive(Clone)]
-enum HumanDateKeyword {
-    Today,
-    Tomorrow,
-    AfterTomorrow,
-}
-
-enum HumanDateExpr {
-    Keyword(HumanDateKeyword),
-    InNDays(u64),
-    ThisWeekWeekday(Weekday),
-    NextWeekWeekday(Weekday),
-    OrdinalWeekdayOfMonth(Ordinal, Weekday, Month),
-}
-
-fn parse(input: &str) -> PResult<(&str, HumanDateExpr)> {
-    let mut parser = alt((
-        keyword.map(HumanDateExpr::Keyword),
-        in_n_days.map(HumanDateExpr::InNDays),
-        ordinal_weekday_of_month.map(|(ordinal, weekday, month)| {
-            HumanDateExpr::OrdinalWeekdayOfMonth(ordinal, weekday, month)
-        }),
-        this_week_weekday.map(HumanDateExpr::ThisWeekWeekday),
-        next_week_weekday.map(HumanDateExpr::NextWeekWeekday),
-    ));
-    let (_, expr) = parser.parse_peek(input)?;
-    Ok((input, expr))
 }
 
 fn keyword(input: &mut &str) -> PResult<HumanDateKeyword> {
@@ -218,138 +163,151 @@ fn month(input: &mut &str) -> PResult<Month> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDate, Weekday};
+    use crate::{HumanDateExpr, HumanDateKeyword, Ordinal};
+    use chrono::{Month, Weekday};
     use winnow::Parser;
 
-    use super::{
-        next, number, this, weekday, HumanDateParser, HumanDateParserBrazillianPortuguese,
-    };
+    use super::{next, number, this, weekday, HumanDateParserBrazillianPortugueseParser};
 
     #[test]
     fn text_keywords() {
-        let now = NaiveDate::from_ymd_opt(2024, 8, 13).unwrap(); // Tue
-
+        let mut parser = HumanDateParserBrazillianPortugueseParser::new();
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("hoje", now),
-            NaiveDate::from_ymd_opt(2024, 8, 13)
+            parser.parse_peek("hoje"),
+            Ok(("", HumanDateExpr::Keyword(HumanDateKeyword::Today)))
         );
-
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("amanhã", now),
-            NaiveDate::from_ymd_opt(2024, 8, 14)
+            parser.parse_peek("amanhã"),
+            Ok(("", HumanDateExpr::Keyword(HumanDateKeyword::Tomorrow)))
         );
-
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("depois de amanhã", now),
-            NaiveDate::from_ymd_opt(2024, 8, 15)
+            parser.parse_peek("depois de amanhã"),
+            Ok(("", HumanDateExpr::Keyword(HumanDateKeyword::AfterTomorrow)))
         );
     }
 
     #[test]
     fn text_in_n_days() {
-        let now = NaiveDate::from_ymd_opt(2024, 8, 13).unwrap(); // Tue
-
+        let mut parser = HumanDateParserBrazillianPortugueseParser::new();
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("daqui 2 dias", now),
-            NaiveDate::from_ymd_opt(2024, 8, 15)
+            parser.parse_peek("daqui 2 dias"),
+            Ok(("", HumanDateExpr::InNDays(2)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("em 2 dias", now),
-            NaiveDate::from_ymd_opt(2024, 8, 15)
+            parser.parse_peek("em 2 dias"),
+            Ok(("", HumanDateExpr::InNDays(2)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("daqui dois dias", now),
-            NaiveDate::from_ymd_opt(2024, 8, 15)
+            parser.parse_peek("daqui dois dias"),
+            Ok(("", HumanDateExpr::InNDays(2)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("em três dias", now),
-            NaiveDate::from_ymd_opt(2024, 8, 16)
+            parser.parse_peek("em dois dias"),
+            Ok(("", HumanDateExpr::InNDays(2)))
         );
     }
 
     #[test]
     fn test_this_week_weekday() {
-        let now = NaiveDate::from_ymd_opt(2024, 8, 13).unwrap(); // Tue
-
+        let mut parser = HumanDateParserBrazillianPortugueseParser::new();
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("esta terça", now),
-            NaiveDate::from_ymd_opt(2024, 8, 13)
+            parser.parse_peek("essa segunda"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Mon)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("esta quarta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 14)
+            parser.parse_peek("esta terça"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Tue)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("esta quinta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 15)
+            parser.parse_peek("esta quarta"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Wed)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("esta sexta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 16)
+            parser.parse_peek("esta quinta"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Thu)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("este sábado", now),
-            NaiveDate::from_ymd_opt(2024, 8, 17)
+            parser.parse_peek("esta sexta"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Fri)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("este domingo", now),
-            NaiveDate::from_ymd_opt(2024, 8, 18)
+            parser.parse_peek("este sábado"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Sat)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("esta segunda", now),
-            NaiveDate::from_ymd_opt(2024, 8, 19)
+            parser.parse_peek("esse domingo"),
+            Ok(("", HumanDateExpr::ThisWeekWeekday(Weekday::Sun)))
         );
     }
 
     #[test]
     fn test_next_week_weekday() {
-        let now = NaiveDate::from_ymd_opt(2024, 8, 13).unwrap(); // Tue
-
+        let mut parser = HumanDateParserBrazillianPortugueseParser::new();
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próxima terça", now),
-            NaiveDate::from_ymd_opt(2024, 8, 20)
+            parser.parse_peek("próxima segunda"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Mon)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próxima quarta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 21)
+            parser.parse_peek("próxima terça"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Tue)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próxima quinta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 22)
+            parser.parse_peek("próxima quarta"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Wed)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próxima sexta", now),
-            NaiveDate::from_ymd_opt(2024, 8, 23)
+            parser.parse_peek("próxima quinta"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Thu)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próximo sábado", now),
-            NaiveDate::from_ymd_opt(2024, 8, 24)
+            parser.parse_peek("próxima sexta"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Fri)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próximo domingo", now),
-            NaiveDate::from_ymd_opt(2024, 8, 25)
+            parser.parse_peek("próximo sábado"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Sat)))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("próxima segunda", now),
-            NaiveDate::from_ymd_opt(2024, 8, 26)
+            parser.parse_peek("próximo domingo"),
+            Ok(("", HumanDateExpr::NextWeekWeekday(Weekday::Sun)))
         );
     }
 
     #[test]
     fn test_ordinal_weekday_of_month() {
-        let now = NaiveDate::from_ymd_opt(2024, 8, 13).unwrap(); // Tue
-
+        let mut parser = HumanDateParserBrazillianPortugueseParser::new();
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("primeiro dom. de setembro", now),
-            NaiveDate::from_ymd_opt(2024, 9, 1)
+            parser.parse_peek("primeiro dom. de setembro"),
+            Ok((
+                "",
+                HumanDateExpr::OrdinalWeekdayOfMonth(
+                    Ordinal::First,
+                    Weekday::Sun,
+                    Month::September
+                )
+            ))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("primeira quinta de setembro", now),
-            NaiveDate::from_ymd_opt(2024, 9, 5)
+            parser.parse_peek("primeira quinta de setembro"),
+            Ok((
+                "",
+                HumanDateExpr::OrdinalWeekdayOfMonth(
+                    Ordinal::First,
+                    Weekday::Thu,
+                    Month::September
+                )
+            ))
         );
         assert_eq!(
-            HumanDateParserBrazillianPortuguese::parse_relative("segundo domingo de setembro", now),
-            NaiveDate::from_ymd_opt(2024, 9, 8)
+            parser.parse_peek("segundo domingo de setembro"),
+            Ok((
+                "",
+                HumanDateExpr::OrdinalWeekdayOfMonth(
+                    Ordinal::Second,
+                    Weekday::Sun,
+                    Month::September
+                )
+            ))
         );
     }
 
