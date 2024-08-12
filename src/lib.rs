@@ -1,5 +1,9 @@
 use chrono::{Datelike, Days, Month, NaiveDate, Utc, Weekday};
-use winnow::Parser;
+use winnow::{
+    combinator::{repeat, repeat_till},
+    token::any,
+    Parser,
+};
 
 pub mod locales;
 
@@ -15,6 +19,19 @@ pub fn parse_relative(input: &mut &str, locale: &Locale, now: &NaiveDate) -> Opt
     match parser.parse(input) {
         Ok(expr) => expr.relative_to(now),
         Err(_) => None,
+    }
+}
+
+pub fn extract_all<'a>(input: &mut &'a str, locale: &'a Locale) -> Vec<HumanDateExpr> {
+    match repeat(
+        0..,
+        repeat_till::<_, (), Vec<()>, HumanDateExpr, _, _, _>(.., any.void(), locale.parser())
+            .map(|(_, expr)| expr),
+    )
+    .parse_next(input)
+    {
+        Ok(result) => result,
+        Err(_) => vec![],
     }
 }
 
@@ -92,7 +109,54 @@ impl Ordinal {
 mod tests {
     use chrono::{Month, NaiveDate, Weekday};
 
-    use super::{HumanDateExpr, HumanDateKeyword, Ordinal};
+    use crate::locales::Locale;
+
+    use super::{extract_all, HumanDateExpr, HumanDateKeyword, Ordinal};
+
+    #[test]
+    fn test_extract_all() {
+        let items = extract_all(&mut "hoje", &Locale::BrazilianPortuguese);
+        assert_eq!(items, vec![HumanDateExpr::Keyword(HumanDateKeyword::Today)]);
+
+        let items = extract_all(&mut "hoje meio amanhã", &Locale::BrazilianPortuguese);
+        assert_eq!(
+            items,
+            vec![
+                HumanDateExpr::Keyword(HumanDateKeyword::Today),
+                HumanDateExpr::Keyword(HumanDateKeyword::Tomorrow)
+            ]
+        );
+
+        let items = extract_all(
+            &mut "prefixo hoje meio amanhã",
+            &Locale::BrazilianPortuguese,
+        );
+        assert_eq!(
+            items,
+            vec![
+                HumanDateExpr::Keyword(HumanDateKeyword::Today),
+                HumanDateExpr::Keyword(HumanDateKeyword::Tomorrow)
+            ]
+        );
+
+        let items = extract_all(&mut "hoje sufixo", &Locale::BrazilianPortuguese);
+        assert_eq!(
+            items,
+            vec![HumanDateExpr::Keyword(HumanDateKeyword::Today),]
+        );
+
+        let items = extract_all(
+            &mut "prefixo hoje meio amanhã sufixo",
+            &Locale::BrazilianPortuguese,
+        );
+        assert_eq!(
+            items,
+            vec![
+                HumanDateExpr::Keyword(HumanDateKeyword::Today),
+                HumanDateExpr::Keyword(HumanDateKeyword::Tomorrow)
+            ]
+        );
+    }
 
     #[test]
     fn test_keywords() {
