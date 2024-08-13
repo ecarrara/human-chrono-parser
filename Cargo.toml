@@ -3,7 +3,7 @@ resolver = "2"
 members = ["./human-chrono-parser", "./bindings/python"]
 
 [workspace.project]
-version = "0.0.1"
+version = "0.0.2"
 description = "Parse human-written relative dates like \"today\" ,\"tomorrow\", \"in 3 days\", \"next monday\" and other variants."
 readme = "README.md"
 authors = ["Erle Carrara <carrara.erle@gmail.com>"]
