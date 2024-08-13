@@ -10,7 +10,7 @@ pub enum Locale {
 }
 
 impl Locale {
-    pub(crate) fn parser(&self) -> Box<dyn Parser<&str, HumanDateExpr, ContextError>> {
+    pub fn parser(&self) -> Box<dyn Parser<&str, HumanDateExpr, ContextError>> {
         match self {
             Self::BrazilianPortuguese => Box::new(HumanDateParserBrazillianPortugueseParser::new()),
         }

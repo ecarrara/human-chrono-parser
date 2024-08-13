@@ -1,6 +1,7 @@
-use chrono::{Datelike, Days, Month, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, Days, Month, NaiveDate, Weekday};
 use winnow::{
     combinator::{repeat, repeat_till},
+    error::{ContextError, ParseError},
     token::any,
     Parser,
 };
@@ -9,17 +10,12 @@ pub mod locales;
 
 use locales::Locale;
 
-pub fn parse(input: &mut &str, locale: &Locale) -> Option<NaiveDate> {
-    let now = Utc::now().date_naive();
-    parse_relative(input, locale, &now)
-}
-
-pub fn parse_relative(input: &mut &str, locale: &Locale, now: &NaiveDate) -> Option<NaiveDate> {
+pub fn parse<'a>(
+    input: &mut &'a str,
+    locale: &'a Locale,
+) -> Result<HumanDateExpr, ParseError<&'a str, ContextError>> {
     let mut parser = locale.parser();
-    match parser.parse(input) {
-        Ok(expr) => expr.relative_to(now),
-        Err(_) => None,
-    }
+    Ok(parser.parse(input)?)
 }
 
 pub fn extract_all<'a>(input: &mut &'a str, locale: &'a Locale) -> Vec<HumanDateExpr> {

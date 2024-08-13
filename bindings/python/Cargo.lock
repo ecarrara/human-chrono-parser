@@ -69,7 +69,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "human-chrono-parser"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "winnow",
@@ -79,7 +79,6 @@ dependencies = [
 name = "human-chrono-parser-python"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "human-chrono-parser",
  "pyo3",
 ]
@@ -186,7 +185,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "831e8e819a138c36e212f3af3fd9eeffed6bf1510a805af35b0edee5ffa59433"
 dependencies = [
  "cfg-if",
- "chrono",
  "indoc",
  "libc",
  "memoffset",
