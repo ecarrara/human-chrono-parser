@@ -16,6 +16,7 @@ fn parse(input: String, locale_name: String) -> PyResult<PyHumanDateExpr> {
 fn get_locale(locale_name: &String) -> PyResult<Locale> {
     match locale_name.as_ref() {
         "pt-BR" => Ok(Locale::BrazilianPortuguese),
+        "en" => Ok(Locale::English),
         _ => Err(PyValueError::new_err(format!(
             "Unknown locale: {}",
             locale_name
